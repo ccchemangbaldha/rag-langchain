@@ -1,0 +1,84 @@
+Artificial intelligence is a broad field of computer science focused on creating systems that can perform tasks requiring human-like intelligence.
+These tasks include reasoning, learning, perception, and decision-making.
+AI systems are widely used in modern applications such as search engines, virtual assistants, and fraud detection systems.
+The goal of artificial intelligence is to build machines that can adapt and improve over time.
+
+Machine learning is a subset of artificial intelligence that allows systems to learn patterns from data.
+Instead of being explicitly programmed, machine learning models are trained using examples.
+As more data becomes available, these models can improve their accuracy.
+Common machine learning algorithms include linear regression, decision trees, and support vector machines.
+
+Deep learning is a specialized area of machine learning that uses neural networks with many layers.
+These neural networks are inspired by the structure of the human brain.
+Deep learning models perform exceptionally well in tasks such as image recognition and natural language processing.
+However, they often require large datasets and significant computational resources.
+
+Neural networks consist of interconnected nodes called neurons.
+Each neuron processes input data and passes the result to the next layer.
+Training a neural network involves adjusting weights to minimize prediction error.
+Backpropagation is a commonly used algorithm for training neural networks.
+
+Cloud computing enables on-demand access to computing resources over the internet.
+It allows organizations to scale their infrastructure without owning physical hardware.
+Popular cloud service providers include Amazon Web Services, Microsoft Azure, and Google Cloud Platform.
+Cloud computing supports services such as data storage, application hosting, and machine learning deployment.
+
+Distributed systems consist of multiple computers working together to achieve a common goal.
+These systems improve reliability and scalability by distributing workloads.
+Failures in one node do not necessarily cause the entire system to fail.
+Examples of distributed systems include microservices architectures and peer-to-peer networks.
+
+Databases are used to store and manage structured information.
+Relational databases organize data into tables with rows and columns.
+SQL is commonly used to query relational databases.
+Examples include MySQL, PostgreSQL, and SQLite.
+
+NoSQL databases are designed to handle unstructured or semi-structured data.
+They provide flexible schemas and horizontal scalability.
+Common types of NoSQL databases include document stores, key-value stores, and graph databases.
+MongoDB and Cassandra are popular NoSQL database systems.
+
+FastAPI is a modern web framework for building APIs with Python.
+It is known for its high performance and automatic API documentation.
+FastAPI uses Python type hints to validate request and response data.
+It is commonly used to build machine learning and AI-powered services.
+
+REST APIs follow a stateless client-server architecture.
+They use HTTP methods such as GET, POST, PUT, and DELETE.
+RESTful services exchange data using formats like JSON.
+These APIs are widely used for communication between frontend and backend systems.
+
+Vector embeddings are numerical representations of text.
+They capture semantic meaning rather than exact word matches.
+Embeddings allow similarity comparisons between pieces of text.
+They are essential for search engines and recommendation systems.
+
+Cosine similarity measures the angle between two vectors.
+It is commonly used to compare embedding similarity.
+A higher cosine similarity indicates closer semantic meaning.
+This metric is widely used in natural language processing tasks.
+
+The capital of Japan is Tokyo.
+Tokyo is one of the most populous cities in the world.
+It is known for its advanced public transportation system.
+Tokyo combines modern technology with traditional culture.
+
+The solar system consists of the Sun and the objects that orbit it.
+Planets, moons, asteroids, and comets are part of the solar system.
+Earth is the third planet from the Sun.
+The study of space is known as astronomy.
+
+Photosynthesis is a biological process used by plants to produce energy.
+It converts sunlight, carbon dioxide, and water into glucose and oxygen.
+This process is essential for life on Earth.
+Photosynthesis forms the base of the food chain.
+
+Cybersecurity focuses on protecting systems and networks from attacks.
+Common threats include malware, phishing, and ransomware.
+Strong authentication and encryption help improve security.
+Cybersecurity is critical for protecting sensitive data.
+
+Software engineering involves designing, building, and maintaining software systems.
+It emphasizes code quality, testing, and maintainability.
+Version control systems like Git are essential tools for software engineers.
+Good engineering practices improve long-term system reliability.

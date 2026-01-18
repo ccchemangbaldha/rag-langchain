@@ -1,0 +1,33 @@
+langchain
+langchain-anthropic
+anthropic
+fastapi
+uvicorn[standard]
+langchain-google-genai
+google-generativeai
+pymupdf
+python-docx
+python-pptx
+unstructured
+python-magic
+langdetect
+tqdm
+
+# langgraph
+# qdrant-client
+# sentence-transformers
+# transformers
+# pymupdf
+# unstructured
+# streamlit
+# pydantic
+# numpy
+# pandas
+# python-docx
+# python-pptx
+# pytesseract
+# Pillow
+# paddlepaddle
+# paddleocr
+# tokenizers
+# rank-bm25
