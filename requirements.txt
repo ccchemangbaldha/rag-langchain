@@ -12,6 +12,12 @@ unstructured
 python-magic
 langdetect
 tqdm
+streamlit
+qdrant-client[fastembed]
+nltk
+openai
+spacy
+hdbscan
 
 # langgraph
 # qdrant-client
