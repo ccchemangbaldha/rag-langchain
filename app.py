@@ -14,75 +14,81 @@ from services.hybrid import hybrid_rag
 from services.retrieve_chunks import retrieve_chunks
 
 st.set_page_config(page_title="RAG Preview Pipeline", layout="wide")
-st.title("📚 RAG Preview — Merge → Chunk → Embed → Store → Search")
+st.title("📚 RAG Preview — Auto-Pipeline")
 
 # ---------------------------------------
-# 1. Upload Phase
+# 1. Upload & Auto-Process Phase
 # ---------------------------------------
 st.header("1. Upload Documents")
 tmp_paths = upload_files_widget()
 
-# ---------------------------------------
-# 2. Merge Phase
-# ---------------------------------------
-st.header("2. Merge")
-if tmp_paths and st.button("🔗 Merge Files"):
-    resp = merge_files(tmp_paths)
-    st.session_state["merged_name"] = resp["name"]
-    st.session_state["merged_content"] = resp["content"]
-    st.session_state["merged_files"] = resp["files_merged"]
-    st.success(f"Merged into: {resp['name']}")
+# Reset processing state if files are cleared/removed
+if not tmp_paths:
+    st.session_state["processing_done"] = False
 
-if "merged_content" in st.session_state:
-    with st.expander("📝 View Merged Content"):
-        st.text_area("Content", st.session_state["merged_content"], height=150)
+# Initialize state if not present
+if "processing_done" not in st.session_state:
+    st.session_state["processing_done"] = False
 
-# ---------------------------------------
-# 3. Chunk + Embedding Phase
-# ---------------------------------------
-st.header("3. Chunk & Embed")
-if "merged_content" in st.session_state:
-    if st.button("🧩 Preview Chunks + Embeddings"):
+# AUTOMATION: If files exist and we haven't processed them yet, run the full pipeline
+if tmp_paths and not st.session_state["processing_done"]:
+    
+    # Use st.status to show the user the progress of the automated steps
+    with st.status("🚀 Auto-Processing: Merging → Chunking → Storing...", expanded=True) as status:
+        
+        # --- Step A: Merge ---
+        st.write("🔗 Merging Files...")
+        resp = merge_files(tmp_paths)
+        st.session_state["merged_name"] = resp["name"]
+        st.session_state["merged_content"] = resp["content"]
+        st.session_state["merged_files"] = resp["files_merged"]
+        
+        # --- Step B: Chunk & Embed ---
+        st.write("🧩 Chunking & Embedding...")
         content = st.session_state["merged_content"]
         files = st.session_state["merged_files"]
-
-        with st.spinner("Chunking and Embedding..."):
-            sentences = split_sentences(content)
-            vectors = embed_sentences(sentences)
-            chunks = cluster_sentences(sentences, vectors, files)
-
+        
+        sentences = split_sentences(content)
+        vectors = embed_sentences(sentences)
+        chunks = cluster_sentences(sentences, vectors, files)
+        
         st.session_state["chunks"] = chunks
         st.session_state["vectors"] = vectors
+        
+        # --- Step C: Store ---
+        st.write("📦 Storing in Qdrant...")
+        new_id = str(uuid4())
+        upload_name = st.session_state["merged_name"]
+        
+        store_chunks(new_id, upload_name, chunks, vectors)
+        
+        # Save the ID and mark processing as complete
+        st.session_state["current_upload_id"] = new_id
+        st.session_state["processing_done"] = True
+        
+        status.update(label="✅ Processing Complete! Data ready for search.", state="complete", expanded=False)
 
-        st.success(f"Processing Complete — {len(chunks)} Chunks generated.")
-
-    if "chunks" in st.session_state:
-        with st.expander("🧩 View Sample Chunks"):
+# Display Summary after processing
+if st.session_state.get("processing_done"):
+    st.success(f"Files Processed Successfully! Active Upload ID: `{st.session_state['current_upload_id']}`")
+    
+    with st.expander("📝 View Processed Content Details"):
+        st.write(f"**Merged Name:** {st.session_state.get('merged_name')}")
+        st.write(f"**Total Chunks:** {len(st.session_state.get('chunks', []))}")
+        st.text_area("Content Preview", st.session_state.get("merged_content", "")[:1000], height=150)
+        
+        if "chunks" in st.session_state:
+            st.divider()
+            st.write("**Sample Chunks:**")
             for i, c in enumerate(st.session_state["chunks"][:3]):
                 st.markdown(f"**Chunk {c['chunk_index']}** ({c['tokens']} tokens)")
                 st.text(c['text'])
                 st.divider()
 
 # ---------------------------------------
-# 4. Store in Qdrant
+# 2. Search / Retrieval Phase
 # ---------------------------------------
-st.header("4. Store Vectors")
-if "chunks" in st.session_state and "vectors" in st.session_state:
-    if st.button("📦 Store in Qdrant"):
-        new_id = str(uuid4())
-        upload_name = st.session_state["merged_name"]
-        
-        with st.spinner("Upserting to Qdrant..."):
-            store_chunks(new_id, upload_name, st.session_state["chunks"], st.session_state["vectors"])
-        
-        # Save the ID to session state so we can use it in search immediately
-        st.session_state["current_upload_id"] = new_id
-        st.success(f"Stored successfully! Upload ID: `{new_id}`")
-
-# ---------------------------------------
-# 5. Search / Retrieval Phase (NEW)
-# ---------------------------------------
-st.header("5. Test Retrieval")
+st.header("2. Test Retrieval")
 st.info("Search for nearest chunks within a specific Upload ID.")
 
 col1, col2 = st.columns([1, 3])
