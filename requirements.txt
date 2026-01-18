@@ -18,6 +18,7 @@ openai
 spacy
 hdbscan
 pinecone
+rank_bm25
 
 # langgraph
 # qdrant-client

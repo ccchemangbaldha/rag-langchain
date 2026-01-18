@@ -8,6 +8,7 @@ from services.preview import merge_files
 from chunks.semantic_chunker import split_sentences, cluster_sentences
 from embedding.preview_embedding import embed_sentences
 from services.store import store_chunks
+from services.hybrid import hybrid_rag
 
 # NEW IMPORT: Retrieval service
 from services.retrieve_chunks import retrieve_chunks
@@ -115,3 +116,28 @@ if st.button("🔍 Search"):
                     st.caption(f"Source: {r['source_files']}")
         else:
             st.warning("No matches found. Check your Upload ID.")
+
+if st.button("🔍 Call LLM Search"):
+    if not target_id or not user_query:
+        st.error("Please provide both an Upload ID and a Query.")
+    else:
+        with st.spinner("Searching..."):
+            results = retrieve_chunks(user_query, target_id, limit=12, threshold=0.1)
+
+        if not results:
+            st.warning("No matches found.")
+        else:
+            rag = hybrid_rag(query=user_query, dense_chunks=results, final_top_k= 5 )
+
+            st.subheader("🧠 RAG Answer")
+            st.write(rag["answer"])
+
+            st.subheader("📊 Confidence")
+            st.write(rag["confidence"])
+
+            st.subheader("📎 Citations")
+            st.write(rag["citations"])
+
+            with st.expander("🔍 Retrieved Chunks"):
+                for r in results:
+                    st.text(f"[{r['chunk_index']}] {r['text']}")
