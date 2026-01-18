@@ -13,11 +13,11 @@ python-magic
 langdetect
 tqdm
 streamlit
-qdrant-client[fastembed]
 nltk
 openai
 spacy
 hdbscan
+pinecone
 
 # langgraph
 # qdrant-client

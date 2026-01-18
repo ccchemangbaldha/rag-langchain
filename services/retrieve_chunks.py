@@ -1,48 +1,52 @@
 # services/retrieve_chunks.py
 import os
+from dotenv import load_dotenv
+from pinecone import Pinecone
 from openai import OpenAI
-from qdrant_client import QdrantClient, models
 
-QDRANT_ENDPOINT = os.getenv("QDRANT_CLUSTER_ENDPOINT")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+load_dotenv()
 
-COL = "first-col"
-VECTOR_FIELD = "first-dense-vector"
+INDEX_NAME = "rag-chunks"
+MODEL = "text-embedding-3-large"
 
-client = QdrantClient(
-    url=QDRANT_ENDPOINT,
-    api_key=QDRANT_API_KEY
-)
+pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
+openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
-
-def embed_query(query: str):
-    resp = openai_client.embeddings.create(
-        model="text-embedding-3-large",
-        input=f"query: {query}"
+def embed_query(q):
+    r = openai_client.embeddings.create(
+        model=MODEL,
+        input=q
     )
-    return resp.data[0].embedding
+    return r.data[0].embedding
 
-def retrieve_chunks(query: str, limit=10, threshold=0.0):
-    qvec = embed_query(query)
 
-    results = client.search(
-        collection_name=COL,
-        query_vector={VECTOR_FIELD: qvec},
-        limit=limit
+def retrieve_chunks(query, upload_id, limit=5, threshold=0.0):
+    # ensure index exists
+    indexes = pc.list_indexes().names()
+    if INDEX_NAME not in indexes:
+        return []   # nothing stored yet
+
+    index = pc.Index(INDEX_NAME)
+
+    vec = embed_query(query)
+
+    result = index.query(
+        vector=vec,
+        namespace=upload_id,
+        top_k=limit,
+        include_metadata=True
     )
 
-    filtered = [
-        {
-            "score": round(r.score, 4),
-            "text": r.payload.get("text"),
-            "chunk_index": r.payload.get("chunk_index"),
-            "upload_id": r.payload.get("upload_id"),
-            "source_files": r.payload.get("source_files"),
-            "tokens": r.payload.get("tokens")
-        }
-        for r in results if r.score >= threshold
-    ]
+    out = []
+    for m in result.matches:
+        if m.score >= threshold:
+            out.append({
+                "score": round(m.score, 4),
+                "chunk_index": m.metadata.get("chunk_index"),
+                "text": m.metadata.get("text"),
+                "tokens": m.metadata.get("tokens"),
+                "source_files": m.metadata.get("source_files"),
+                "upload_id": m.metadata.get("upload_id")
+            })
 
-    return filtered
+    return out

@@ -1,43 +1,48 @@
 # services/store.py
-import uuid
 import os
-from qdrant_client import QdrantClient, models
+import uuid
+from pinecone import Pinecone, ServerlessSpec
 
-QDRANT_ENDPOINT = os.getenv("QDRANT_CLUSTER_ENDPOINT")
-QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+INDEX_NAME = "rag-chunks"
+DIM = 3072
 
-COL = "first-col"
-VECTOR_FIELD = "first-dense-vector"
+pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
 
-client = QdrantClient(
-    url=QDRANT_ENDPOINT,
-    api_key=QDRANT_API_KEY
-)
 
-def store_chunks(upload_id, upload_name, chunks, vectors):
-    points = []
-
-    for c, v in zip(chunks, vectors):
-        composite_id = f"{upload_id}-{c['chunk_index']}"
-        point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, composite_id))
-
-        payload = {
-            "custom_id": composite_id,
-            "upload_id": upload_id,
-            "upload_name": upload_name,
-            "chunk_index": c["chunk_index"],
-            "text": c["text"],
-            "tokens": c["tokens"],
-            "source_files": c["source_files"],
-            "language": "en"
-        }
-
-        points.append(
-            models.PointStruct(
-                id=point_id,
-                vector={VECTOR_FIELD: v},
-                payload=payload
+def get_index():
+    indexes = pc.list_indexes().names()
+    if INDEX_NAME not in indexes:
+        pc.create_index(
+            name=INDEX_NAME,
+            dimension=DIM,
+            metric="cosine",
+            spec=ServerlessSpec(
+                cloud="aws",
+                region="us-east-1"  # can be changed to match your OPENAI region but not required
             )
         )
+    return pc.Index(INDEX_NAME)
 
-    client.upsert(collection_name=COL, points=points)
+
+def store_chunks(upload_id, upload_name, chunks, vectors):
+    index = get_index()
+    namespace = upload_id
+
+    payloads = []
+    for c, v in zip(chunks, vectors):
+        pid = f"{upload_id}-{c['chunk_index']}"
+
+        payloads.append({
+            "id": pid,
+            "values": v,
+            "metadata": {
+                "upload_id": upload_id,
+                "upload_name": upload_name,
+                "chunk_index": c["chunk_index"],
+                "text": c["text"],
+                "tokens": c["tokens"],
+                "source_files": c["source_files"],
+            }
+        })
+
+    index.upsert(vectors=payloads, namespace=namespace)
