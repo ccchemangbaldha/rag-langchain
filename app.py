@@ -2,7 +2,6 @@
 import streamlit as st
 from uuid import uuid4
 
-# Import your existing modules
 from ui.upload import upload_files_widget
 from services.preview import merge_files
 from chunks.semantic_chunker import split_sentences, cluster_sentences
@@ -10,40 +9,30 @@ from embedding.preview_embedding import embed_sentences
 from services.store import store_chunks
 from services.hybrid import hybrid_rag
 
-# NEW IMPORT: Retrieval service
 from services.retrieve_chunks import retrieve_chunks
 
 st.set_page_config(page_title="RAG Preview Pipeline", layout="wide")
 st.title("📚 RAG Preview — Auto-Pipeline")
 
-# ---------------------------------------
-# 1. Upload & Auto-Process Phase
-# ---------------------------------------
 st.header("1. Upload Documents")
 tmp_paths = upload_files_widget()
 
-# Reset processing state if files are cleared/removed
 if not tmp_paths:
     st.session_state["processing_done"] = False
 
-# Initialize state if not present
 if "processing_done" not in st.session_state:
     st.session_state["processing_done"] = False
 
-# AUTOMATION: If files exist and we haven't processed them yet, run the full pipeline
 if tmp_paths and not st.session_state["processing_done"]:
     
-    # Use st.status to show the user the progress of the automated steps
     with st.status("🚀 Auto-Processing: Merging → Chunking → Storing...", expanded=True) as status:
         
-        # --- Step A: Merge ---
         st.write("🔗 Merging Files...")
         resp = merge_files(tmp_paths)
         st.session_state["merged_name"] = resp["name"]
         st.session_state["merged_content"] = resp["content"]
         st.session_state["merged_files"] = resp["files_merged"]
         
-        # --- Step B: Chunk & Embed ---
         st.write("🧩 Chunking & Embedding...")
         content = st.session_state["merged_content"]
         files = st.session_state["merged_files"]
@@ -55,7 +44,6 @@ if tmp_paths and not st.session_state["processing_done"]:
         st.session_state["chunks"] = chunks
         st.session_state["vectors"] = vectors
         
-        # --- Step C: Store ---
         st.write("📦 Storing in Qdrant...")
         new_id = str(uuid4())
         upload_name = st.session_state["merged_name"]
@@ -67,7 +55,6 @@ if tmp_paths and not st.session_state["processing_done"]:
         
         status.update(label="✅ Processing Complete! Data ready for search.", state="complete", expanded=False)
 
-# Display Summary after processing
 if st.session_state.get("processing_done"):
     st.success(f"Files Processed Successfully! Active Upload ID: `{st.session_state['current_upload_id']}`")
     
@@ -84,9 +71,6 @@ if st.session_state.get("processing_done"):
                 st.text(c['text'])
                 st.divider()
 
-# ---------------------------------------
-# 2. Search / Retrieval Phase
-# ---------------------------------------
 st.header("2. Test Retrieval")
 st.info("Search for nearest chunks within a specific Upload ID.")
 
@@ -99,6 +83,8 @@ with col1:
 with col2:
     user_query = st.text_input("Enter Search Query")
 
+generate_viz = st.checkbox("🎨 Generate AI Illustration (DALL-E 3)", value=False, help="Generates a diagram based on your query. Slower & costs extra.")
+
 if st.button("🔍 Call LLM Search"):
     if not target_id or not user_query:
         st.error("Please provide both an Upload ID and a Query.")
@@ -109,15 +95,28 @@ if st.button("🔍 Call LLM Search"):
         if not results:
             st.warning("No matches found.")
         else:
-            rag = hybrid_rag(query=user_query, dense_chunks=results, final_top_k=8)
-
+            status_text = "Synthesizing Answer..."
+            if generate_viz:
+                status_text = "Synthesizing Answer & Generating Image..."
+                
+            with st.spinner(status_text):
+                rag = hybrid_rag(
+                    query=user_query, 
+                    dense_chunks=results, 
+                    final_top_k=8, 
+                    enable_image=generate_viz
+                )
             st.subheader("🧠 RAG Answer")
             st.markdown(rag["answer"])
+            if rag.get("image_url"):
+                st.subheader("🎨 Generated Illustration")
+                st.image(rag["image_url"], caption=f"AI Diagram for: {user_query}")
+            elif generate_viz:
+                st.warning("Image generation failed (or API error). Check logs.")
 
             st.subheader("📊 Confidence Score")
             conf_val = rag["confidence"]
-            
-            if conf_val > 0.7:
+            if conf_val > 0.75:
                 st.success(f"High Confidence: {conf_val}")
             elif conf_val > 0.4:
                 st.warning(f"Medium Confidence: {conf_val}")
