@@ -62,7 +62,6 @@ if tmp_paths and not st.session_state["processing_done"]:
         
         store_chunks(new_id, upload_name, chunks, vectors)
         
-        # Save the ID and mark processing as complete
         st.session_state["current_upload_id"] = new_id
         st.session_state["processing_done"] = True
         
@@ -93,7 +92,6 @@ st.info("Search for nearest chunks within a specific Upload ID.")
 
 col1, col2 = st.columns([1, 3])
 
-# Auto-fill the ID if we just stored data
 default_id = st.session_state.get("current_upload_id", "")
 
 with col1:
@@ -101,49 +99,35 @@ with col1:
 with col2:
     user_query = st.text_input("Enter Search Query")
 
-if st.button("🔍 Search"):
-    if not target_id or not user_query:
-        st.error("Please provide both an Upload ID and a Query.")
-    else:
-        with st.spinner("Searching..."):
-            results = retrieve_chunks(
-                query=user_query, 
-                upload_id=target_id, 
-                limit=8,
-                threshold=0.5
-            )
-        
-        if results:
-            st.write(f"Found {len(results)} matches:")
-            for r in results:
-                with st.container(border=True):
-                    st.markdown(f"**Score:** `{r['score']}` | **Chunk:** `{r['chunk_index']}`")
-                    st.markdown(f"_{r['text']}_")
-                    st.caption(f"Source: {r['source_files']}")
-        else:
-            st.warning("No matches found. Check your Upload ID.")
-
 if st.button("🔍 Call LLM Search"):
     if not target_id or not user_query:
         st.error("Please provide both an Upload ID and a Query.")
     else:
-        with st.spinner("Searching..."):
-            results = retrieve_chunks(user_query, target_id, limit=12, threshold=0.1)
+        with st.spinner("Searching & Reasoning..."):
+            results = retrieve_chunks(user_query, target_id, limit=50, threshold=0.1)
 
         if not results:
             st.warning("No matches found.")
         else:
-            rag = hybrid_rag(query=user_query, dense_chunks=results, final_top_k= 5 )
+            rag = hybrid_rag(query=user_query, dense_chunks=results, final_top_k=8)
 
             st.subheader("🧠 RAG Answer")
-            st.write(rag["answer"])
+            st.markdown(rag["answer"])
 
-            st.subheader("📊 Confidence")
-            st.write(rag["confidence"])
+            st.subheader("📊 Confidence Score")
+            conf_val = rag["confidence"]
+            
+            if conf_val > 0.75:
+                st.success(f"High Confidence: {conf_val}")
+            elif conf_val > 0.4:
+                st.warning(f"Medium Confidence: {conf_val}")
+            else:
+                st.error(f"Low Confidence: {conf_val}")
 
-            st.subheader("📎 Citations")
+            st.subheader("📎 Citations Used")
             st.write(rag["citations"])
 
-            with st.expander("🔍 Retrieved Chunks"):
-                for r in results:
-                    st.text(f"[{r['chunk_index']}] {r['text']}")
+            with st.expander("🔍 Inspect Top Evidence (Debug)"):
+                # Show top 5 reranked chunks
+                for r in results[:5]: 
+                    st.text(f"[{r.get('chunk_index')}] (Score: {r.get('rerank_score', 0)}) {r['text'][:200]}...")

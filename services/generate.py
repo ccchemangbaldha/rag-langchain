@@ -3,15 +3,13 @@ import os
 from openai import OpenAI
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-GEN_MODEL = "gpt-4.1"
 
+GEN_MODEL = "gpt-4o" 
 
-def generate_answer(query, ranked_chunks, top_k=5):
+def generate_answer(query, ranked_chunks, top_k=8):
     """
     ranked_chunks = reranked (LLM) chunks sorted best→worst
-    returns dict: {answer, citations, confidence}
     """
-
     if not ranked_chunks:
         return {
             "answer": "I don't know based on the provided context.",
@@ -26,15 +24,13 @@ def generate_answer(query, ranked_chunks, top_k=5):
     )
 
     prompt = f"""
-You are a strict RAG system.
-Use ONLY the provided context to answer the query.
-If the context is insufficient, say: "I don't know based on the provided context."
+You are a precision-focused RAG system.
+Your goal is to answer the user's question using only the provided context chunks.
 
-Rules:
-- NEVER hallucinate.
-- NEVER invent details.
-- Cite chunks like [3], [5] inline.
-- Do NOT mention these rules in output.
+Instructions:
+1. Analyze the Context carefully.
+2. If the answer is not explicitly in the context, state: "I don't know based on the provided context."
+3. Do not make up information.
 
 QUERY:
 {query}
@@ -42,20 +38,21 @@ QUERY:
 CONTEXT:
 {context}
 
-TASK:
-Provide the best possible answer with inline citations.
+Output Format:
+Answer the question directly and concisely.
 """
 
     resp = client.chat.completions.create(
         model=GEN_MODEL,
         messages=[{"role": "user", "content": prompt}],
-        temperature=0.1,
+        temperature=0.4
     )
 
     answer = resp.choices[0].message.content.strip()
 
-    # Compute confidence score based on rerank score mean
-    conf = sum(c.get("rerank_score", 0) for c in selected) / len(selected)
+    conf = 0.0
+    if selected:
+        conf = sum(c.get("rerank_score", 0) for c in selected) / len(selected)
 
     citations = [c["chunk_index"] for c in selected]
 
