@@ -50,7 +50,6 @@ Instructions:
 1. Analyze the Context carefully.
 2. If the answer is not explicitly in the context, state: "I don't know based on the provided context."
 3. Do NOT make up information.
-4. You MUST cite your sources using the format [chunk_index] at the end of the sentence.
 
 QUERY:
 {query}
@@ -59,7 +58,7 @@ CONTEXT:
 {context}
 
 Output Format:
-Answer the question directly and concisely. Attach citations like [1] or [1][3].
+Answer the question directly and concisely.
 """
 
     resp = client.chat.completions.create(

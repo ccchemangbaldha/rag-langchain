@@ -8,7 +8,7 @@ google-generativeai
 pymupdf
 python-docx
 python-pptx
-unstructured
+unstructured[pdf]
 python-magic
 langdetect
 tqdm
@@ -21,21 +21,7 @@ pinecone
 rank_bm25
 https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0.tar.gz#egg=en_core_web_sm
 
-# langgraph
-# qdrant-client
-# sentence-transformers
-# transformers
-# pymupdf
-# unstructured
-# streamlit
-# pydantic
-# numpy
-# pandas
-# python-docx
-# python-pptx
-# pytesseract
-# Pillow
-# paddlepaddle
-# paddleocr
-# tokenizers
-# rank-bm25
+pytesseract
+pdf2image
+Pillow
+onnxruntime

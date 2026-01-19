@@ -1,5 +1,5 @@
 from typing import List, Dict
-import fitz
+import fitz  # PyMuPDF
 import docx
 from pptx import Presentation
 import os
@@ -7,7 +7,48 @@ import zipfile
 import tempfile
 import shutil
 
+# Try importing unstructured for advanced PDF parsing
+try:
+    from unstructured.partition.pdf import partition_pdf
+    UNSTRUCTURED_AVAILABLE = True
+except ImportError:
+    UNSTRUCTURED_AVAILABLE = False
+
 def parse_pdf(path: str) -> str:
+    """
+    Parses PDF using 'unstructured' for advanced table/image OCR extraction.
+    Falls back to 'fitz' (PyMuPDF) if unstructured fails or isn't installed.
+    """
+    if UNSTRUCTURED_AVAILABLE:
+        try:
+            # strategy="hi_res" enables layout analysis (tables) and OCR (images)
+            # infer_table_structure=True allows extracting the table as HTML
+            elements = partition_pdf(
+                filename=path,
+                strategy="hi_res",
+                infer_table_structure=True,
+                extract_images_in_pdf=False, # We want the TEXT from images (OCR), not the image files themselves
+                chunking_strategy="by_title", # Helps keep semantic sections together
+                max_characters=4000,
+                new_after_n_chars=3800,
+                combine_text_under_n_chars=2000,
+            )
+            
+            all_text = []
+            for el in elements:
+                # If it's a table, prefer the HTML representation for better LLM understanding
+                if el.category == "Table" and el.metadata.text_as_html:
+                    all_text.append(f"\n[TABLE]\n{el.metadata.text_as_html}\n[/TABLE]\n")
+                else:
+                    all_text.append(el.text)
+            
+            return "\n\n".join(all_text)
+            
+        except Exception as e:
+            print(f"Unstructured parsing failed for {path}: {e}. Falling back to standard PyMuPDF.")
+            # Fallthrough to fitz implementation below
+
+    # Fallback / Standard implementation
     doc = fitz.open(path)
     all_text = []
     for page in doc:
@@ -56,7 +97,8 @@ def parse_file(path: str) -> List[Dict]:
 
     try:
         content = parser(path)
-    except Exception:
+    except Exception as e:
+        print(f"Error parsing {filename}: {e}")
         content = ""
 
     return [{
@@ -95,7 +137,8 @@ if __name__ == "__main__":
         items = parse_folder(args.path)
     else:
         items = parse_file(args.path)
-    print(items)
+    
     for item in items:
         print("-------------------------------------------")
-        print(item["filename"], item["filetype"], item["content"])
+        print(f"Filename: {item['filename']}")
+        print(f"Content Preview: {item['content'][:500]}...")

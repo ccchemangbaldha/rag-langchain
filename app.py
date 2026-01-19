@@ -1,128 +1,145 @@
-# app.py
 import streamlit as st
+import time
 from uuid import uuid4
 
+# Internal modules
 from ui.upload import upload_files_widget
 from services.preview import merge_files
 from chunks.semantic_chunker import split_sentences, cluster_sentences
 from embedding.preview_embedding import embed_sentences
 from services.store import store_chunks
 from services.hybrid import hybrid_rag
-
 from services.retrieve_chunks import retrieve_chunks
 
-st.set_page_config(page_title="RAG Preview Pipeline", layout="wide")
-st.title("📚 RAG Preview — Auto-Pipeline")
+# --- Page Config ---
+st.set_page_config(page_title="RAG Chat Assistant", page_icon="🤖", layout="wide")
 
-st.header("1. Upload Documents")
-tmp_paths = upload_files_widget()
-
-if not tmp_paths:
-    st.session_state["processing_done"] = False
+# --- Session State Initialization ---
+if "messages" not in st.session_state:
+    st.session_state.messages = []
 
 if "processing_done" not in st.session_state:
-    st.session_state["processing_done"] = False
+    st.session_state.processing_done = False
 
-if tmp_paths and not st.session_state["processing_done"]:
+if "current_upload_id" not in st.session_state:
+    st.session_state.current_upload_id = None
+
+# --- Sidebar: Configuration & Knowledge Base ---
+with st.sidebar:
+    st.header("📂 Knowledge Base")
+    st.info("Upload documents to start the chat.")
     
-    with st.status("🚀 Auto-Processing: Merging → Chunking → Storing...", expanded=True) as status:
-        
-        st.write("🔗 Merging Files...")
-        resp = merge_files(tmp_paths)
-        st.session_state["merged_name"] = resp["name"]
-        st.session_state["merged_content"] = resp["content"]
-        st.session_state["merged_files"] = resp["files_merged"]
-        
-        st.write("🧩 Chunking & Embedding...")
-        content = st.session_state["merged_content"]
-        files = st.session_state["merged_files"]
-        
-        sentences = split_sentences(content)
-        vectors = embed_sentences(sentences)
-        chunks = cluster_sentences(sentences, vectors, files)
-        
-        st.session_state["chunks"] = chunks
-        st.session_state["vectors"] = vectors
-        
-        st.write("📦 Storing in Qdrant...")
-        new_id = str(uuid4())
-        upload_name = st.session_state["merged_name"]
-        
-        store_chunks(new_id, upload_name, chunks, vectors)
-        
-        st.session_state["current_upload_id"] = new_id
-        st.session_state["processing_done"] = True
-        
-        status.update(label="✅ Processing Complete! Data ready for search.", state="complete", expanded=False)
+    # 1. File Upload Widget
+    tmp_paths = upload_files_widget()
 
-if st.session_state.get("processing_done"):
-    st.success(f"Files Processed Successfully! Active Upload ID: `{st.session_state['current_upload_id']}`")
-    
-    with st.expander("📝 View Processed Content Details"):
-        st.write(f"**Merged Name:** {st.session_state.get('merged_name')}")
-        st.write(f"**Total Chunks:** {len(st.session_state.get('chunks', []))}")
-        st.text_area("Content Preview", st.session_state.get("merged_content", "")[:1000], height=150)
-        
-        if "chunks" in st.session_state:
-            st.divider()
-            st.write("**Sample Chunks:**")
-            for i, c in enumerate(st.session_state["chunks"][:3]):
-                st.markdown(f"**Chunk {c['chunk_index']}** ({c['tokens']} tokens)")
-                st.text(c['text'])
-                st.divider()
-
-st.header("2. Test Retrieval")
-st.info("Search for nearest chunks within a specific Upload ID.")
-
-col1, col2 = st.columns([1, 3])
-
-default_id = st.session_state.get("current_upload_id", "")
-
-with col1:
-    target_id = st.text_input("Target Upload ID", value=default_id)
-with col2:
-    user_query = st.text_input("Enter Search Query")
-
-generate_viz = st.checkbox("🎨 Generate AI Illustration (DALL-E 3)", value=False, help="Generates a diagram based on your query. Slower & costs extra.")
-
-if st.button("🔍 Call LLM Search"):
-    if not target_id or not user_query:
-        st.error("Please provide both an Upload ID and a Query.")
-    else:
-        with st.spinner("Searching & Reasoning..."):
-            results = retrieve_chunks(user_query, target_id, limit=50, threshold=0.1)
-
-        if not results:
-            st.warning("No matches found.")
-        else:
-            status_text = "Synthesizing Answer..."
-            if generate_viz:
-                status_text = "Synthesizing Answer & Generating Image..."
+    # 2. Process Button Logic
+    if tmp_paths and not st.session_state.processing_done:
+        if st.button("🚀 Process Documents", type="primary"):
+            with st.status("⚙️ Building Knowledge Base...", expanded=True) as status:
                 
-            with st.spinner(status_text):
-                rag = hybrid_rag(
-                    query=user_query, 
+                st.write("🔗 Merging & Parsing Files...")
+                resp = merge_files(tmp_paths)
+                st.session_state["merged_name"] = resp["name"]
+                st.session_state["merged_content"] = resp["content"]
+                st.session_state["merged_files"] = resp["files_merged"]
+                
+                st.write("🧠 Semantic Chunking & Embedding...")
+                sentences = split_sentences(resp["content"])
+                vectors = embed_sentences(sentences)
+                chunks = cluster_sentences(sentences, vectors, resp["files_merged"])
+                
+                st.write("💾 Storing Vectors (Pinecone)...")
+                new_id = str(uuid4())
+                store_chunks(new_id, resp["name"], chunks, vectors)
+                
+                # Save State
+                st.session_state["current_upload_id"] = new_id
+                st.session_state.processing_done = True
+                
+                status.update(label="✅ Ready to Chat!", state="complete", expanded=False)
+                st.rerun()
+
+    # 3. Status Display
+    if st.session_state.processing_done:
+        st.success(f"**Active ID:** `{st.session_state.current_upload_id}`")
+        st.write(f"**Files:** {len(st.session_state.get('merged_files', []))}")
+        st.write(f"**Total Chunks:** {len(st.session_state.get('chunks', []))}")
+        
+        if st.button("🔄 Reset / Clear", type="secondary"):
+            st.session_state.clear()
+            st.rerun()
+            
+    st.divider()
+    st.caption("Settings")
+    generate_viz = st.toggle("🎨 Generate AI Diagrams", value=False, help="Slower, uses DALL-E 3")
+
+# --- Main Area: Chat Interface ---
+st.title("💬 Intelligent Document Chat")
+st.caption("🚀 Powered by RAG (Hybrid Search + Semantic Reranking)")
+
+# 1. Display Chat History
+for message in st.session_state.messages:
+    with st.chat_message(message["role"]):
+        st.markdown(message["content"])
+        if "image" in message and message["image"]:
+            st.image(message["image"], caption="Generated Illustration")
+
+# 2. Handle User Input
+if prompt := st.chat_input("Ask a question about your documents..."):
+    
+    # Check if KB is ready
+    if not st.session_state.processing_done:
+        st.error("⚠️ Please upload and process documents in the sidebar first!")
+        st.stop()
+
+    # Append User Message
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    # Generate Assistant Response
+    with st.chat_message("assistant"):
+        message_placeholder = st.empty()
+        
+        with st.status("🧠 Thinking...", expanded=False) as status:
+            upload_id = st.session_state.current_upload_id
+            
+            st.write("🔍 Retrieving chunks...")
+            # Retrieve Step
+            results = retrieve_chunks(prompt, upload_id, limit=50, threshold=0.1)
+            
+            if not results:
+                full_response = "I couldn't find any relevant information in the uploaded documents to answer that."
+                image_url = None
+                status.update(label="❌ No context found", state="error")
+            else:
+                st.write("✨ Synthesizing answer (GPT-4o)...")
+                # Generation Step
+                rag_response = hybrid_rag(
+                    query=prompt, 
                     dense_chunks=results, 
                     final_top_k=8, 
                     enable_image=generate_viz
                 )
-            st.subheader("🧠 RAG Answer")
-            st.markdown(rag["answer"])
-            if rag.get("image_url"):
-                st.subheader("🎨 Generated Illustration")
-                st.image(rag["image_url"], caption=f"AI Diagram for: {user_query}")
-            elif generate_viz:
-                st.warning("Image generation failed (or API error). Check logs.")
+                
+                full_response = rag_response["answer"]
+                confidence = rag_response["confidence"]
+                image_url = rag_response.get("image_url")
+                
+                # Append Metadata footer
+                if confidence < 0.4:
+                    full_response += "\n\n> ⚠️ **Note:** *Confidence is low. Please verify with the source documents.*"
+                
+                status.update(label="✅ Response Generated", state="complete")
 
-            st.subheader("📊 Confidence Score")
-            conf_val = rag["confidence"]
-            if conf_val > 0.75:
-                st.success(f"High Confidence: {conf_val}")
-            elif conf_val > 0.4:
-                st.warning(f"Medium Confidence: {conf_val}")
-            else:
-                st.error(f"Low Confidence: {conf_val}")
+        # Stream/Display Result
+        message_placeholder.markdown(full_response)
+        if image_url:
+            st.image(image_url, caption=f"Visual for: {prompt}")
 
-            with st.expander("🔍 Inspect Top Evidence (Debug)"):
-                for r in results[:5]: 
-                    st.text(f"[{r.get('chunk_index')}] (Score: {r.get('rerank_score', 0)}) {r['text'][:200]}...")
+    # Save Assistant Message to History
+    st.session_state.messages.append({
+        "role": "assistant", 
+        "content": full_response,
+        "image": image_url
+    })
