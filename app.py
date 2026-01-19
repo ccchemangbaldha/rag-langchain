@@ -117,17 +117,13 @@ if st.button("🔍 Call LLM Search"):
             st.subheader("📊 Confidence Score")
             conf_val = rag["confidence"]
             
-            if conf_val > 0.75:
+            if conf_val > 0.7:
                 st.success(f"High Confidence: {conf_val}")
             elif conf_val > 0.4:
                 st.warning(f"Medium Confidence: {conf_val}")
             else:
                 st.error(f"Low Confidence: {conf_val}")
 
-            st.subheader("📎 Citations Used")
-            st.write(rag["citations"])
-
             with st.expander("🔍 Inspect Top Evidence (Debug)"):
-                # Show top 5 reranked chunks
                 for r in results[:5]: 
                     st.text(f"[{r.get('chunk_index')}] (Score: {r.get('rerank_score', 0)}) {r['text'][:200]}...")
