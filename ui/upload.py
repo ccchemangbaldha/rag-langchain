@@ -5,7 +5,7 @@ import tempfile
 def upload_files_widget():
     uploaded_files = st.file_uploader(
         "Upload files",
-        type=["pdf", "pptx", "ppt", "docx", "doc", "txt", "zip"],
+        type=["pdf", "pptx", "ppt", "docx", "doc", "txt", "zip","md"],
         accept_multiple_files=True
     )
 
