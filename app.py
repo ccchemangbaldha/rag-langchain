@@ -1,6 +1,7 @@
 import streamlit as st
 import time
 from uuid import uuid4
+import re
 
 from ui.upload import upload_files_widget
 from services.preview import merge_files
@@ -39,10 +40,6 @@ st.markdown("""
     h1, h2, h3 {
         font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif !important; 
         color: #2c3e50;
-    }
-    .big-font {
-        font-size: 20px !important;
-        font-weight: bold;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -97,7 +94,6 @@ with st.sidebar:
     if st.session_state.processing_done:
         st.success(f"📚 **Study Set Active**")
         st.caption(f"ID: `{st.session_state.current_upload_id}`")
-        st.markdown(f"**Pages read:** {len(st.session_state.get('files_merged', [])) if 'files_merged' in st.session_state else 'Multiple'}")
         st.markdown(f"**Knowledge chunks:** {st.session_state.get('total_chunks', 0)}")
         
         if st.button("🗑️ Clear & Start Over", type="secondary", use_container_width=True):
@@ -109,7 +105,6 @@ with st.sidebar:
     generate_viz = st.toggle("✨ Draw diagrams for me", value=True, help="I will draw a picture if I find a good answer!")
 
 st.title("🎓 Smart Study Buddy")
-st.markdown("Ask me anything about your uploaded notes! I'll try to explain it simply.")
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -133,16 +128,38 @@ if prompt := st.chat_input("Ex: What is Cybersecurity?"):
         with st.spinner("🤔 Thinking hard..."):
             upload_id = st.session_state.current_upload_id
             
-            results = retrieve_chunks(prompt, upload_id, limit=40, threshold=0.1)
+            # --- MODIFIED: Multi-Question Retrieval Logic ---
+            # Split the prompt into individual sentences/questions
+            sub_queries = re.split(r'(?<=[.?!])\s+', prompt)
+            sub_queries = [q.strip() for q in sub_queries if len(q.strip()) > 5]
+
+            all_combined_results = []
+            seen_chunk_ids = set()
+
+            # If re.split didn't find multiple sentences, use the full prompt
+            if not sub_queries:
+                sub_queries = [prompt]
+
+            for query_part in sub_queries:
+                # Retrieve chunks for each specific part of the user's input
+                part_results = retrieve_chunks(query_part, upload_id, limit=15, threshold=0.1)
+                
+                for res in part_results:
+                    # Deduplicate based on chunk_index
+                    if res["chunk_index"] not in seen_chunk_ids:
+                        all_combined_results.append(res)
+                        seen_chunk_ids.add(res["chunk_index"])
+            # ------------------------------------------------
             
-            if not results:
-                full_response = "I looked through your notes, but I couldn't find anything about that. Sorry! 🤷‍♂️"
+            if not all_combined_results:
+                full_response = "I looked through your notes, but I couldn't find anything about those topics. 🤷‍♂️"
                 image_url = None
             else:
+                # Use the combined chunks for the final RAG generation
                 rag_response = hybrid_rag(
                     query=prompt, 
-                    dense_chunks=results, 
-                    final_top_k=7, 
+                    dense_chunks=all_combined_results, 
+                    final_top_k=10, # Increased k to handle multiple topics
                     enable_image=generate_viz
                 )
                 

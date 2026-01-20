@@ -82,6 +82,7 @@ EXT_MAP = {
     ".docx": parse_docx,
     ".doc": parse_docx,
     ".txt": parse_txt,
+    ".md": parse_txt,
 }
 
 def parse_file(path: str) -> List[Dict]:
