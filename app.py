@@ -2,21 +2,58 @@ import streamlit as st
 import time
 from uuid import uuid4
 
-# Internal modules
 from ui.upload import upload_files_widget
 from services.preview import merge_files
-from chunks.semantic_chunker import split_sentences, cluster_sentences
+from chunks.semantic_chunker import create_smart_chunks
 from embedding.preview_embedding import embed_sentences
 from services.store import store_chunks
 from services.hybrid import hybrid_rag
 from services.retrieve_chunks import retrieve_chunks
 
-# --- Page Config ---
-st.set_page_config(page_title="RAG Chat Assistant", page_icon="🤖", layout="wide")
+st.set_page_config(
+    page_title="Smart Study Buddy", 
+    page_icon="🎓", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# --- Session State Initialization ---
+st.markdown("""
+<style>
+    /* Main Chat Container */
+    .stChatMessage {
+        border-radius: 15px;
+        padding: 15px;
+        margin-bottom: 10px;
+    }
+    /* User Message Bubble */
+    div[data-testid="stChatMessage"][data-testid-user="true"] {
+        background-color: #e3f2fd;
+        border-left: 5px solid #2196f3;
+    }
+    /* Assistant Message Bubble */
+    div[data-testid="stChatMessage"][data-testid-user="false"] {
+        background-color: #f1f8e9;
+        border-left: 5px solid #66bb6a;
+    }
+    /* Headers */
+    h1, h2, h3 {
+        font-family: 'Comic Sans MS', 'Chalkboard SE', sans-serif !important; 
+        color: #2c3e50;
+    }
+    .big-font {
+        font-size: 20px !important;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
+    st.session_state.messages.append({
+        "role": "assistant", 
+        "content": "👋 Hi there! I'm your AI Study Buddy. Upload your school notes, textbooks, or PDFs in the sidebar, and I'll help you learn!",
+        "image": None
+    })
 
 if "processing_done" not in st.session_state:
     st.session_state.processing_done = False
@@ -24,120 +61,101 @@ if "processing_done" not in st.session_state:
 if "current_upload_id" not in st.session_state:
     st.session_state.current_upload_id = None
 
-# --- Sidebar: Configuration & Knowledge Base ---
 with st.sidebar:
-    st.header("📂 Knowledge Base")
-    st.info("Upload documents to start the chat.")
+    st.header("🎒 My Backpack")
+    st.markdown("Add your study materials here:")
     
-    # 1. File Upload Widget
     tmp_paths = upload_files_widget()
 
-    # 2. Process Button Logic
     if tmp_paths and not st.session_state.processing_done:
-        if st.button("🚀 Process Documents", type="primary"):
-            with st.status("⚙️ Building Knowledge Base...", expanded=True) as status:
+        st.divider()
+        if st.button("🚀 Start Studying!", type="primary", use_container_width=True):
+            with st.status("⚙️ Organizing your notes...", expanded=True) as status:
                 
-                st.write("🔗 Merging & Parsing Files...")
+                st.write("📖 Reading files...")
                 resp = merge_files(tmp_paths)
-                st.session_state["merged_name"] = resp["name"]
-                st.session_state["merged_content"] = resp["content"]
-                st.session_state["merged_files"] = resp["files_merged"]
                 
-                st.write("🧠 Semantic Chunking & Embedding...")
-                sentences = split_sentences(resp["content"])
-                vectors = embed_sentences(sentences)
-                chunks = cluster_sentences(sentences, vectors, resp["files_merged"])
+                st.write("✂️ Creating smart study chunks...")
+                chunks = create_smart_chunks(resp["content"], resp["files_merged"])
                 
-                st.write("💾 Storing Vectors (Pinecone)...")
+                st.write("🧠 Memorizing content...")
+                text_list = [c["text"] for c in chunks]
+                vectors = embed_sentences(text_list)
+                
+                st.write("💾 Saving to Brain (Database)...")
                 new_id = str(uuid4())
                 store_chunks(new_id, resp["name"], chunks, vectors)
                 
-                # Save State
                 st.session_state["current_upload_id"] = new_id
                 st.session_state.processing_done = True
+                st.session_state["total_chunks"] = len(chunks)
                 
-                status.update(label="✅ Ready to Chat!", state="complete", expanded=False)
+                status.update(label="✅ Ready to learn!", state="complete", expanded=False)
+                time.sleep(1)
                 st.rerun()
 
-    # 3. Status Display
     if st.session_state.processing_done:
-        st.success(f"**Active ID:** `{st.session_state.current_upload_id}`")
-        st.write(f"**Files:** {len(st.session_state.get('merged_files', []))}")
-        st.write(f"**Total Chunks:** {len(st.session_state.get('chunks', []))}")
+        st.success(f"📚 **Study Set Active**")
+        st.caption(f"ID: `{st.session_state.current_upload_id}`")
+        st.markdown(f"**Pages read:** {len(st.session_state.get('files_merged', [])) if 'files_merged' in st.session_state else 'Multiple'}")
+        st.markdown(f"**Knowledge chunks:** {st.session_state.get('total_chunks', 0)}")
         
-        if st.button("🔄 Reset / Clear", type="secondary"):
+        if st.button("🗑️ Clear & Start Over", type="secondary", use_container_width=True):
             st.session_state.clear()
             st.rerun()
-            
+
     st.divider()
-    st.caption("Settings")
-    generate_viz = st.toggle("🎨 Generate AI Diagrams", value=False, help="Slower, uses DALL-E 3")
+    st.markdown("### 🎨 Creativity Mode")
+    generate_viz = st.toggle("✨ Draw diagrams for me", value=True, help="I will draw a picture if I find a good answer!")
 
-# --- Main Area: Chat Interface ---
-st.title("💬 Intelligent Document Chat")
-st.caption("🚀 Powered by RAG (Hybrid Search + Semantic Reranking)")
+st.title("🎓 Smart Study Buddy")
+st.markdown("Ask me anything about your uploaded notes! I'll try to explain it simply.")
 
-# 1. Display Chat History
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
-        if "image" in message and message["image"]:
-            st.image(message["image"], caption="Generated Illustration")
+        if message.get("image"):
+            st.image(message["image"], caption="🎨 Here is a visual helper!", use_container_width=True)
 
-# 2. Handle User Input
-if prompt := st.chat_input("Ask a question about your documents..."):
+if prompt := st.chat_input("Ex: What is Cybersecurity?"):
     
-    # Check if KB is ready
     if not st.session_state.processing_done:
-        st.error("⚠️ Please upload and process documents in the sidebar first!")
+        st.warning("⚠️ Wait! Your backpack is empty. Please upload some files in the sidebar first.")
         st.stop()
 
-    # Append User Message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Generate Assistant Response
     with st.chat_message("assistant"):
         message_placeholder = st.empty()
         
-        with st.status("🧠 Thinking...", expanded=False) as status:
+        with st.spinner("🤔 Thinking hard..."):
             upload_id = st.session_state.current_upload_id
             
-            st.write("🔍 Retrieving chunks...")
-            # Retrieve Step
-            results = retrieve_chunks(prompt, upload_id, limit=50, threshold=0.1)
+            results = retrieve_chunks(prompt, upload_id, limit=40, threshold=0.1)
             
             if not results:
-                full_response = "I couldn't find any relevant information in the uploaded documents to answer that."
+                full_response = "I looked through your notes, but I couldn't find anything about that. Sorry! 🤷‍♂️"
                 image_url = None
-                status.update(label="❌ No context found", state="error")
             else:
-                st.write("✨ Synthesizing answer (GPT-4o)...")
-                # Generation Step
                 rag_response = hybrid_rag(
                     query=prompt, 
                     dense_chunks=results, 
-                    final_top_k=8, 
+                    final_top_k=7, 
                     enable_image=generate_viz
                 )
                 
                 full_response = rag_response["answer"]
-                confidence = rag_response["confidence"]
                 image_url = rag_response.get("image_url")
                 
-                # Append Metadata footer
-                if confidence < 0.4:
-                    full_response += "\n\n> ⚠️ **Note:** *Confidence is low. Please verify with the source documents.*"
-                
-                status.update(label="✅ Response Generated", state="complete")
+                if rag_response["confidence"] < 0.35 and "I don't know" not in full_response:
+                    full_response += "\n\n> 🧐 *I'm not 100% sure, so please double-check your textbooks!*"
 
-        # Stream/Display Result
         message_placeholder.markdown(full_response)
         if image_url:
-            st.image(image_url, caption=f"Visual for: {prompt}")
+            st.image(image_url, caption=f"🎨 Visual: {prompt}")
 
-    # Save Assistant Message to History
     st.session_state.messages.append({
         "role": "assistant", 
         "content": full_response,
